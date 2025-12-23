@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Etiqueta Envío</title>
+
+<style>
+body { font-family: Arial; background:#f4f4f4; padding:30px; display:flex; justify-content:center; }
+.formulario { width:420px; background:#fff; padding:20px; border-radius:6px; margin-right:20px; }
+label { font-weight:bold; font-size:13px; }
+input, select { width:100%; padding:6px; margin-bottom:6px; }
+button { padding:7px; background:black; color:white; border:none; cursor:pointer; }
+.topo { background:#eee; padding:10px; margin-bottom:10px; }
+.botoesTopo { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px; }
+.etiqueta { width:559px; height:350px; background:#fff; border:2px solid #000; padding:18px; display:none; position:relative; }
+.orden { position:absolute; right:20px; top:15px; font-size:18px; font-weight:bold; }
+.logo { width:150px; margin:45px 0 10px; }
+.footer { position:absolute; bottom:20px; left:18px; right:18px; display:flex; justify-content:space-between; }
+.fragil { font-size:30px; font-weight:bold; color:darkred; }
+</style>
+</head>
+
+<body>
+
+<div class="formulario">
+<h2>Etiqueta Envío</h2>
+
+<div class="topo">
+<label>Buscar cliente por RUT</label>
+<input id="buscarRut">
+<div class="botoesTopo">
+<button onclick="buscarCliente()">Buscar</button>
+<button onclick="guardarCliente()">Guardar</button>
+<button onclick="verHistorial()">Historial</button>
+<button onclick="exportar()">Exportar</button>
+</div>
+</div>
+
+<label>Transportadora</label>
+<select id="transportadoraInput">
+<option>Chilexpress</option>
+<option>Starken</option>
+<option>Bluexpress</option>
+</select>
+
+<label>Destinatario</label><input id="destInput">
+<label>Teléfono</label><input id="fonoInput">
+<label>RUT</label><input id="rutInput">
+<label>Dirección</label><input id="dirInput">
+<label>Ciudad</label><input id="ciudadInput">
+<label>Postal</label><input id="postalInput">
+<label>Orden</label><input id="ordenInput">
+<label>Producto</label><input id="prodInput">
+<label>Bultos</label><input id="bultosInput">
+
+<button onclick="generar()">Generar</button>
+<button onclick="window.print()">Imprimir</button>
+
+<div id="historial"></div>
+</div>
+
+<div class="etiqueta" id="etiqueta">
+<div class="orden">Orden <span id="orden"></span></div>
+<img class="logo" src="logo.png">
+<p><strong>Destinatario:</strong> <span id="dest"></span></p>
+<p><strong>RUT:</strong> <span id="rut"></span></p>
+<p><strong>Dirección:</strong> <span id="dir"></span></p>
+<p><strong>Ciudad:</strong> <span id="ciudad"></span></p>
+<p><strong>Producto:</strong> <span id="prod"></span></p>
+<p><strong>Bultos:</strong> <span id="bultos"></span></p>
+<div class="footer">
+<svg id="barcode"></svg>
+<div>
+<div class="fragil">FRÁGIL</div>
+<canvas id="qrCanvas"></canvas>
+</div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbz0gfaJ8XoYotjd-UyAv9wFerB6OoS-PP_8vUdCYKDr-qJAz0J1A8STpfTavbm2Qujr/exec";
+
+/* ===== FUNCOES ===== */
+
+async function buscarCliente() {
+  const r = await fetch(`${API_URL}?action=buscarCliente&rut=${buscarRut.value}`);
+  const d = await r.json();
+  if (!d) return alert("Não encontrado");
+
+  rutInput.value = d.rut;
+  destInput.value = d.destinatario;
+  fonoInput.value = d.telefono;
+  dirInput.value = d.direccion;
+  ciudadInput.value = d.ciudad;
+  postalInput.value = d.postal;
+}
+
+async function guardarCliente() {
+  await fetch(API_URL, {
+    method:"POST",
+    body:JSON.stringify({
+      action:"salvarCliente",
+      rut:rutInput.value,
+      destinatario:destInput.value,
+      telefono:fonoInput.value,
+      direccion:dirInput.value,
+      ciudad:ciudadInput.value,
+      postal:postalInput.value
+    })
+  });
+  alert("Cliente salvo");
+}
+
+async function generar() {
+  orden.innerText = ordenInput.value;
+  dest.innerText = destInput.value;
+  rut.innerText = rutInput.value;
+  dir.innerText = dirInput.value;
+  ciudad.innerText = ciudadInput.value;
+  prod.innerText = prodInput.value;
+  bultos.innerText = bultosInput.value;
+
+  new QRious({ element: qrCanvas, value: ordenInput.value, size: 90 });
+  JsBarcode("#barcode", ordenInput.value, { height:55 });
+
+  await fetch(API_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    action: "salvarEnvio",
+    orden: ordenInput.value,
+    rut: rutInput.value,
+    destinatario: destInput.value,
+    transportadora: transportadoraInput.value,
+    produto: prodInput.value,
+    bultos: bultosInput.value
+  })
+});
+
+
+  etiqueta.style.display="block";
+}
+
+async function verHistorial() {
+  const r = await fetch(`${API_URL}?action=listarEnvios`);
+  const d = await r.json();
+  historial.innerHTML = "<table>" + d.map(e=>`<tr><td>${e[1]}</td><td>${e[3]}</td></tr>`).join("") + "</table>";
+}
+
+function exportar() {
+  alert("Dados estão no Google Sheets");
+}
+</script>
+
+</body>
+</html>
